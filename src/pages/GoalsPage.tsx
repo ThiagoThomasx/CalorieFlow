@@ -4,6 +4,8 @@ import type { Objective } from '../types/nutrition'
 import { useAppState } from '../state/AppStateContext'
 import { formatMl } from '../lib/format'
 import { GlassCard } from '../components/ui/GlassCard'
+import { ErrorState } from '../components/ui/ErrorState'
+import { Skeleton } from '../components/ui/Skeleton'
 import { PageTransition } from '../components/layout/PageTransition'
 
 const OBJECTIVES: Array<{ id: Objective; label: string; hint: string }> = [
@@ -80,14 +82,43 @@ const PROTEIN_STEP = 5
 const WATER_STEP = 250
 
 export default function GoalsPage() {
-  const { goals, updateGoals } = useAppState()
+  const { status, goals, updateGoals, retry } = useAppState()
+
+  if (status === 'loading') {
+    return (
+      <PageTransition>
+        <header className="mt-6">
+          <h1 className="font-display text-2xl font-bold tracking-tight">Metas</h1>
+          <p className="mt-1 text-sm text-fog">
+            Ajuste seus alvos diários. Salvo automaticamente na sua conta.
+          </p>
+        </header>
+        <div aria-busy="true" className="mt-6 flex flex-col gap-3.5">
+          <Skeleton className="h-20 w-full rounded-3xl" />
+          <Skeleton className="h-20 w-full rounded-3xl" />
+          <Skeleton className="h-20 w-full rounded-3xl" />
+        </div>
+      </PageTransition>
+    )
+  }
+
+  if (status === 'error') {
+    return (
+      <PageTransition>
+        <header className="mt-6">
+          <h1 className="font-display text-2xl font-bold tracking-tight">Metas</h1>
+        </header>
+        <ErrorState onRetry={retry} />
+      </PageTransition>
+    )
+  }
 
   return (
     <PageTransition>
       <header className="mt-6">
         <h1 className="font-display text-2xl font-bold tracking-tight">Metas</h1>
         <p className="mt-1 text-sm text-fog">
-          Ajuste seus alvos diários. Tudo é salvo localmente por enquanto.
+          Ajuste seus alvos diários. Salvo automaticamente na sua conta.
         </p>
       </header>
 

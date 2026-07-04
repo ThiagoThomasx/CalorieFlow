@@ -1,13 +1,10 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Flame, Info } from 'lucide-react'
+import { ArrowLeft, Flame, Info, MailCheck } from 'lucide-react'
 import { Button } from '../components/ui/Button'
-import {
-  isSupabaseConfigured,
-  signInWithEmail,
-  signUpWithEmail,
-} from '../lib/supabase'
+import { isSupabaseConfigured } from '../lib/supabase'
+import { useAuth } from '../state/AuthContext'
 
 type AuthMode = 'login' | 'signup'
 
@@ -19,6 +16,7 @@ const INPUT_CLASSES =
 export default function AuthPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
+  const { signIn, signUp } = useAuth()
 
   const initialMode: AuthMode =
     searchParams.get('mode') === 'signup' ? 'signup' : 'login'
@@ -27,6 +25,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null)
 
   const isLogin = mode === 'login'
 
@@ -44,16 +43,35 @@ export default function AuthPage() {
     }
 
     setIsSubmitting(true)
-    const result = isLogin
-      ? await signInWithEmail(email, password)
-      : await signUpWithEmail(email, password)
-    setIsSubmitting(false)
+    if (isLogin) {
+      const result = await signIn(email, password)
+      setIsSubmitting(false)
+      if (!result.ok) {
+        setError(result.message)
+        return
+      }
+      navigate('/app', { replace: true })
+      return
+    }
 
+    const result = await signUp(email, password)
+    setIsSubmitting(false)
     if (!result.ok) {
       setError(result.message)
       return
     }
-    navigate('/app')
+    if (result.needsEmailConfirmation) {
+      setConfirmationEmail(email)
+      return
+    }
+    navigate('/app', { replace: true })
+  }
+
+  function handleBackToLogin() {
+    setConfirmationEmail(null)
+    setMode('login')
+    setPassword('')
+    setError(null)
   }
 
   return (
@@ -78,104 +96,128 @@ export default function AuthPage() {
         <div className="size-10" aria-hidden />
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="mt-10"
-      >
-        <h1 className="font-display text-3xl font-bold tracking-tight">
-          {isLogin ? 'Bem-vindo de volta' : 'Crie sua conta'}
-        </h1>
-        <p className="mt-2 text-[15px] text-fog">
-          {isLogin
-            ? 'Continue de onde parou.'
-            : 'Leva menos de um minuto para começar.'}
-        </p>
-
-        {/* Alternador login/registro */}
-        <div className="glass mt-8 flex rounded-2xl p-1">
-          {(['login', 'signup'] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => {
-                setMode(option)
-                setError(null)
-              }}
-              className={`relative flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors duration-200 ${
-                mode === option ? 'text-ink' : 'text-fog hover:text-snow'
-              }`}
-            >
-              {mode === option && (
-                <motion.span
-                  layoutId="auth-tab"
-                  className="absolute inset-0 rounded-xl bg-lime"
-                  transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                />
-              )}
-              <span className="relative">
-                {option === 'login' ? 'Entrar' : 'Registrar'}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-3.5">
-          <input
-            type="email"
-            autoComplete="email"
-            placeholder="seu@email.com"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            className={INPUT_CLASSES}
-          />
-          <input
-            type="password"
-            autoComplete={isLogin ? 'current-password' : 'new-password'}
-            placeholder="Senha"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className={INPUT_CLASSES}
-          />
-
-          {error && (
-            <p role="alert" className="px-1 text-sm text-amber">
-              {error}
-            </p>
-          )}
-
-          <Button type="submit" fullWidth isLoading={isSubmitting} className="mt-1">
-            {isLogin ? 'Entrar' : 'Criar conta'}
-          </Button>
-        </form>
-
-        <div className="my-6 flex items-center gap-3 text-xs text-faint">
-          <span className="h-px flex-1 bg-line" />
-          ou
-          <span className="h-px flex-1 bg-line" />
-        </div>
-
-        <Button
-          fullWidth
-          variant="outline"
-          onClick={() => setError('Login com Google chega na próxima sprint.')}
+      {confirmationEmail ? (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="mt-16 flex flex-col items-center text-center"
         >
-          <GoogleIcon />
-          Continuar com Google
-        </Button>
-
-        {!isSupabaseConfigured() && (
-          <div className="glass mt-6 flex items-start gap-2.5 rounded-2xl p-3.5 text-xs leading-relaxed text-fog">
-            <Info className="mt-0.5 size-4 shrink-0 text-cyan" />
-            <span>
-              Supabase ainda não configurado — o app segue em{' '}
-              <strong className="text-snow">modo demonstração</strong> com dados
-              locais. Veja o README para conectar.
-            </span>
+          <div className="glass-strong flex size-16 items-center justify-center rounded-3xl">
+            <MailCheck className="size-8 text-lime" strokeWidth={1.8} />
           </div>
-        )}
-      </motion.div>
+          <h1 className="mt-6 font-display text-3xl font-bold tracking-tight">
+            Confirme seu e-mail
+          </h1>
+          <p className="mt-3 max-w-72 text-[15px] leading-relaxed text-fog">
+            Enviamos um link de confirmação para{' '}
+            <strong className="text-snow">{confirmationEmail}</strong>. Abra sua
+            caixa de entrada para ativar a conta e depois entre.
+          </p>
+          <Button fullWidth className="mt-8" onClick={handleBackToLogin}>
+            Ir para o login
+          </Button>
+        </motion.div>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="mt-10"
+        >
+          <h1 className="font-display text-3xl font-bold tracking-tight">
+            {isLogin ? 'Bem-vindo de volta' : 'Crie sua conta'}
+          </h1>
+          <p className="mt-2 text-[15px] text-fog">
+            {isLogin
+              ? 'Continue de onde parou.'
+              : 'Leva menos de um minuto para começar.'}
+          </p>
+
+          {/* Alternador login/registro */}
+          <div className="glass mt-8 flex rounded-2xl p-1">
+            {(['login', 'signup'] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => {
+                  setMode(option)
+                  setError(null)
+                }}
+                className={`relative flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors duration-200 ${
+                  mode === option ? 'text-ink' : 'text-fog hover:text-snow'
+                }`}
+              >
+                {mode === option && (
+                  <motion.span
+                    layoutId="auth-tab"
+                    className="absolute inset-0 rounded-xl bg-lime"
+                    transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                  />
+                )}
+                <span className="relative">
+                  {option === 'login' ? 'Entrar' : 'Registrar'}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-3.5">
+            <input
+              type="email"
+              autoComplete="email"
+              placeholder="seu@email.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              className={INPUT_CLASSES}
+            />
+            <input
+              type="password"
+              autoComplete={isLogin ? 'current-password' : 'new-password'}
+              placeholder="Senha"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              className={INPUT_CLASSES}
+            />
+
+            {error && (
+              <p role="alert" className="px-1 text-sm text-amber">
+                {error}
+              </p>
+            )}
+
+            <Button type="submit" fullWidth isLoading={isSubmitting} className="mt-1">
+              {isLogin ? 'Entrar' : 'Criar conta'}
+            </Button>
+          </form>
+
+          <div className="my-6 flex items-center gap-3 text-xs text-faint">
+            <span className="h-px flex-1 bg-line" />
+            ou
+            <span className="h-px flex-1 bg-line" />
+          </div>
+
+          <Button
+            fullWidth
+            variant="outline"
+            onClick={() => setError('Login com Google chega na próxima sprint.')}
+          >
+            <GoogleIcon />
+            Continuar com Google
+          </Button>
+
+          {!isSupabaseConfigured() && (
+            <div className="glass mt-6 flex items-start gap-2.5 rounded-2xl p-3.5 text-xs leading-relaxed text-fog">
+              <Info className="mt-0.5 size-4 shrink-0 text-amber" />
+              <span>
+                <strong className="text-snow">Supabase não configurado.</strong>{' '}
+                Crie o arquivo <code>.env.local</code> com as credenciais do
+                projeto (veja o README) para ativar login e persistência.
+              </span>
+            </div>
+          )}
+        </motion.div>
+      )}
     </div>
   )
 }

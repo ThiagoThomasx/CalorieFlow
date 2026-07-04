@@ -12,7 +12,6 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import type { MealType, NutritionAnalysis } from '../types/nutrition'
 import { analyzeMealText, suggestMealType } from '../lib/nutrition'
-import { MOCK_USER } from '../lib/mockData'
 import { mealTypeLabel } from '../lib/format'
 import { useAppState } from '../state/AppStateContext'
 import { Button } from '../components/ui/Button'
@@ -47,6 +46,7 @@ export default function LogPage() {
   const [mealType, setMealType] = useState<MealType>(suggestMealType())
   const [analysis, setAnalysis] = useState<NutritionAnalysis | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   async function handleAnalyze() {
     if (text.trim().length < 3) return
@@ -57,22 +57,12 @@ export default function LogPage() {
     setIsAnalyzing(false)
   }
 
-  function handleSave() {
-    if (!analysis) return
-    addMeal({
-      id: `meal-${Date.now()}`,
-      userId: MOCK_USER.id,
-      name: mealTypeLabel(mealType),
-      description: analysis.description,
-      mealType,
-      calories: analysis.calories,
-      protein: analysis.protein,
-      carbs: analysis.carbs,
-      fat: analysis.fat,
-      fiber: analysis.fiber,
-      sodium: analysis.sodium,
-      createdAt: new Date().toISOString(),
-    })
+  async function handleSave() {
+    if (!analysis || isSaving) return
+    setIsSaving(true)
+    const saved = await addMeal(mealType, analysis)
+    setIsSaving(false)
+    if (!saved) return
     showToast('Refeição salva com sucesso')
     navigate('/app')
   }
@@ -218,7 +208,7 @@ export default function LogPage() {
               ))}
             </div>
 
-            <Button fullWidth onClick={handleSave} className="mt-4">
+            <Button fullWidth onClick={handleSave} isLoading={isSaving} className="mt-4">
               Salvar refeição
             </Button>
           </motion.div>

@@ -1,19 +1,32 @@
 import { Link } from 'react-router-dom'
 import { Activity, Droplets, Flame, Plus, UtensilsCrossed } from 'lucide-react'
 import { useAppState } from '../state/AppStateContext'
-import { MOCK_USER, CUP_SIZE_ML, MOCK_ACTIVITY } from '../lib/mockData'
+import { useAuth } from '../state/AuthContext'
+import { CUP_SIZE_ML } from '../lib/constants'
 import { dayKey, formatFullDate, formatMl, greetingForHour } from '../lib/format'
 import { sumMeals } from '../lib/nutrition'
 import { GlassCard } from '../components/ui/GlassCard'
 import { ProgressRing } from '../components/ui/ProgressRing'
 import { EmptyState } from '../components/ui/EmptyState'
+import { ErrorState } from '../components/ui/ErrorState'
+import { Skeleton } from '../components/ui/Skeleton'
 import { MacroBar } from '../components/nutrition/MacroBar'
 import { MealCard } from '../components/nutrition/MealCard'
 import { PageTransition } from '../components/layout/PageTransition'
 
 export default function HomePage() {
-  const { meals, goals, waterMl, activityMinutes, caloriesBurned, addWater, showToast } =
-    useAppState()
+  const { user } = useAuth()
+  const {
+    status,
+    meals,
+    goals,
+    waterMl,
+    activity,
+    profile,
+    addWater,
+    retry,
+    showToast,
+  } = useAppState()
 
   const now = new Date()
   const today = dayKey(now.toISOString())
@@ -21,9 +34,35 @@ export default function HomePage() {
   const consumed = sumMeals(todayMeals)
   const remaining = Math.max(goals.caloriesGoal - consumed.calories, 0)
 
+  const displayName =
+    profile?.displayName ?? user?.email?.split('@')[0] ?? 'você'
+  const avatarLetter = displayName.charAt(0).toUpperCase()
+
   function handleAddWater() {
     addWater(CUP_SIZE_ML)
     showToast(`+${CUP_SIZE_ML} ml de água registrados`)
+  }
+
+  if (status === 'loading') {
+    return (
+      <PageTransition>
+        <HomeSkeleton />
+      </PageTransition>
+    )
+  }
+
+  if (status === 'error') {
+    return (
+      <PageTransition>
+        <header className="mt-6">
+          <p className="text-sm text-fog capitalize">{formatFullDate(now)}</p>
+          <h1 className="mt-0.5 font-display text-2xl font-bold tracking-tight">
+            {greetingForHour(now.getHours())}
+          </h1>
+        </header>
+        <ErrorState onRetry={retry} />
+      </PageTransition>
+    )
   }
 
   return (
@@ -33,7 +72,7 @@ export default function HomePage() {
         <div>
           <p className="text-sm text-fog capitalize">{formatFullDate(now)}</p>
           <h1 className="mt-0.5 font-display text-2xl font-bold tracking-tight">
-            {greetingForHour(now.getHours())}, {MOCK_USER.name}
+            {greetingForHour(now.getHours())}, {displayName}
           </h1>
         </div>
         <Link
@@ -41,7 +80,7 @@ export default function HomePage() {
           aria-label="Abrir perfil"
           className="glass flex size-11 items-center justify-center rounded-2xl font-display text-sm font-bold text-lime"
         >
-          {MOCK_USER.name.charAt(0)}
+          {avatarLetter}
         </Link>
       </header>
 
@@ -118,12 +157,14 @@ export default function HomePage() {
         <GlassCard className="p-4" delay={0.18}>
           <Activity className="size-5 text-amber" strokeWidth={1.8} />
           <p className="mt-3 font-display text-xl font-bold">
-            {activityMinutes} min
+            {activity?.minutes ?? 0} min
           </p>
-          <p className="mt-0.5 text-xs text-fog">{MOCK_ACTIVITY.label}</p>
+          <p className="mt-0.5 text-xs text-fog">
+            {activity?.type ?? 'Sem atividade hoje'}
+          </p>
           <p className="mt-3 inline-flex items-center gap-1 rounded-full bg-amber/10 px-2 py-0.5 text-[11px] font-medium text-amber">
             <Flame className="size-3" />
-            {caloriesBurned} kcal
+            {activity?.caloriesBurned ?? 0} kcal
           </p>
         </GlassCard>
       </div>
@@ -158,5 +199,29 @@ export default function HomePage() {
         )}
       </section>
     </PageTransition>
+  )
+}
+
+function HomeSkeleton() {
+  return (
+    <div aria-busy="true" aria-label="Carregando seus dados">
+      <header className="mt-6 flex items-center justify-between">
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-7 w-52" />
+        </div>
+        <Skeleton className="size-11" />
+      </header>
+      <Skeleton className="mt-6 h-80 w-full rounded-3xl" />
+      <div className="mt-4 grid grid-cols-2 gap-4">
+        <Skeleton className="h-36 rounded-3xl" />
+        <Skeleton className="h-36 rounded-3xl" />
+      </div>
+      <Skeleton className="mt-7 h-6 w-44" />
+      <div className="mt-3 flex flex-col gap-2.5">
+        <Skeleton className="h-20 w-full" />
+        <Skeleton className="h-20 w-full" />
+      </div>
+    </div>
   )
 }

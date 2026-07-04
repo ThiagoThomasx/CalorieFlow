@@ -6,6 +6,8 @@ import { dayKey, dayLabel } from '../lib/format'
 import { sumMeals } from '../lib/nutrition'
 import { MealCard } from '../components/nutrition/MealCard'
 import { EmptyState } from '../components/ui/EmptyState'
+import { ErrorState } from '../components/ui/ErrorState'
+import { Skeleton } from '../components/ui/Skeleton'
 import { Button } from '../components/ui/Button'
 import { PageTransition } from '../components/layout/PageTransition'
 
@@ -29,7 +31,7 @@ function groupMealsByDay(meals: MealLog[]): DayGroup[] {
 
 export default function HistoryPage() {
   const navigate = useNavigate()
-  const { meals } = useAppState()
+  const { status, meals, retry } = useAppState()
   const groups = groupMealsByDay(meals)
 
   return (
@@ -39,7 +41,17 @@ export default function HistoryPage() {
         <p className="mt-1 text-sm text-fog">Suas refeições, dia a dia.</p>
       </header>
 
-      {groups.length === 0 ? (
+      {status === 'loading' ? (
+        <div aria-busy="true" className="mt-5 flex flex-col gap-2.5">
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="mt-4 h-5 w-24" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+      ) : status === 'error' ? (
+        <ErrorState onRetry={retry} />
+      ) : groups.length === 0 ? (
         <EmptyState
           icon={CalendarDays}
           title="Histórico vazio"

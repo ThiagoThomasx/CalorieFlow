@@ -5,7 +5,6 @@ export type Objective = 'lose_fat' | 'maintain' | 'gain_muscle'
 export interface MealLog {
   id: string
   userId: string
-  name: string
   description: string
   mealType: MealType
   calories: number

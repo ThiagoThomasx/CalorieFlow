@@ -63,6 +63,17 @@ export function dayLabel(key: string): string {
   return formatFullDate(new Date(year, month - 1, day))
 }
 
+/** "04/07/2026, 14:32" */
+export function formatDateTime(iso: string): string {
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(iso))
+}
+
 export function formatMl(ml: number): string {
   if (ml >= 1000) {
     const liters = ml / 1000

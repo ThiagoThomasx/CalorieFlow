@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
 import { Toast } from '../ui/Toast'
+import { OfflineBanner } from '../ui/OfflineBanner'
 
 /**
  * Shell autenticado do app: coluna central com largura de mobile,
@@ -19,6 +20,7 @@ export function AppLayout() {
       </main>
       <BottomNav />
       <Toast />
+      <OfflineBanner />
     </div>
   )
 }
