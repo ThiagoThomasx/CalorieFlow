@@ -68,6 +68,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const goalsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const waterRef = useRef(0)
   const goalsRef = useRef<UserGoals>(DEFAULT_GOALS)
+  const loadIdRef = useRef(0)
 
   const todayKey = dayKey(new Date().toISOString())
 
@@ -79,6 +80,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
   const loadAll = useCallback(async () => {
     if (!userId) return
+    // Invalida respostas de cargas anteriores ainda em voo
+    // (retry rápido, virada de dia) para não aplicar dados obsoletos.
+    const loadId = ++loadIdRef.current
     setStatus('loading')
     try {
       const [mealsData, goalsData, water, activityData, profileData] =
@@ -89,6 +93,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           activityRepository.getForDate(userId, todayKey),
           profileRepository.getById(userId),
         ])
+
+      if (loadId !== loadIdRef.current) return
 
       const resolvedGoals = goalsData ?? DEFAULT_GOALS
       goalsRef.current = resolvedGoals
@@ -101,7 +107,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setProfile(profileData)
       setStatus('ready')
     } catch {
-      setStatus('error')
+      if (loadId === loadIdRef.current) setStatus('error')
     }
   }, [userId, todayKey])
 

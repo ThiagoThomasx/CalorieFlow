@@ -4,7 +4,8 @@ App mobile-first de tracking nutricional. Registre calorias, macros, água e
 atividades em menos de 20 segundos.
 
 **Stack:** React 19 · Vite · TypeScript · Tailwind CSS 4 · React Router 7 ·
-Framer Motion · Supabase (Auth + Postgres + RLS) · Lucide Icons
+Framer Motion · Supabase (Auth + Postgres + RLS + Edge Functions) ·
+Claude API (análise nutricional por IA) · Lucide Icons
 
 ---
 
@@ -72,6 +73,104 @@ Reinicie o `npm run dev` após criar/alterar o arquivo.
 
 ---
 
+## IA Nutricional (Edge Function)
+
+> **💰 Custo externo:** a análise por IA usa a **Claude API da Anthropic, que é
+> paga** (exige conta em [console.anthropic.com](https://console.anthropic.com)
+> com créditos). Ordem de grandeza por análise: ~US$ 0,02 com o modelo padrão
+> (`claude-opus-4-8`) ou ~US$ 0,004 com `claude-haiku-4-5`.
+>
+> **Sem custo nenhum:** se a Edge Function não estiver deployada (ou a secret
+> não existir), o app continua 100% utilizável — a análise cai automaticamente
+> para uma **estimativa local gratuita** (tabela offline de alimentos
+> brasileiros), sinalizada na UI como "Estimativa local aproximada".
+
+O registro de refeições usa IA real desde a Sprint 3. A arquitetura é:
+
+```text
+Frontend (NutritionService)
+   ↓ JWT do usuário
+Supabase Edge Function (nutrition-analysis)
+   ↓ ANTHROPIC_API_KEY (secret — nunca chega ao navegador)
+Claude API → JSON estruturado → validado → frontend
+```
+
+- **Nenhuma tela conhece a API de IA** — o `LogPage` só usa
+  `analyzeMealWithAI` de `src/services/ai/NutritionService.ts`, que implementa
+  o contrato `NutritionAnalyzer` de `src/lib/nutrition.ts`.
+- **A API key nunca fica no frontend** — vive como secret da Edge Function.
+- **Fallback local automático** — se a função responder 404/500/503 (não
+  deployada, sem secret ou instável), `NutritionService` usa
+  `src/services/ai/localAnalyzer.ts` (estimativa offline, confiança 30%,
+  `model: "local-fallback"` gravado no histórico). Erros semânticos (texto
+  inválido, sessão expirada, rate limit) continuam sendo mostrados ao usuário.
+
+### Arquivos da função
+
+```text
+supabase/functions/nutrition-analysis/
+├── index.ts      # handler: CORS, auth (JWT), orquestração, logs, erros
+├── prompt.ts     # system prompt + JSON Schema (structured outputs)
+├── types.ts      # contratos da resposta + PARSER_VERSION
+├── parser.ts     # resposta da IA → objetos internos (totais recalculados)
+└── validator.ts  # estrutura, campos obrigatórios, coerência de macros
+```
+
+### Deploy da função
+
+Pré-requisito: [Supabase CLI](https://supabase.com/docs/guides/cli) logada
+(`supabase login`) e vinculada ao projeto (`supabase link --project-ref SEU_REF`).
+
+```bash
+# 1. Configure a secret com a chave da Anthropic (console.anthropic.com)
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+
+# 2. (Opcional) escolha outro modelo — padrão: claude-opus-4-8
+supabase secrets set NUTRITION_MODEL=claude-haiku-4-5
+
+# 3. Deploy
+supabase functions deploy nutrition-analysis
+```
+
+A função exige JWT válido (verify_jwt ativo por padrão) **e** revalida o
+usuário internamente via `auth.getUser()`.
+
+### Testando a função direto (curl)
+
+```bash
+curl -X POST "https://SEU-PROJETO.supabase.co/functions/v1/nutrition-analysis" \
+  -H "Authorization: Bearer TOKEN_DE_ACESSO_DO_USUARIO" \
+  -H "apikey: SUA_ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"text":"2 ovos, 100g de arroz e uma banana"}'
+```
+
+Resposta esperada: `{ "items": [...], "totals": {...}, "confidence": 0.9, "meta": {...} }`.
+
+### Como trocar de modelo ou provedor de IA
+
+- **Trocar o modelo (mesmo provedor):** `supabase secrets set NUTRITION_MODEL=...`
+  e redeploy — nenhum código muda.
+- **Trocar o provedor (OpenAI, Gemini…):** edite apenas
+  `supabase/functions/nutrition-analysis/index.ts` (a chamada ao SDK) e, se o
+  novo provedor não suportar JSON Schema, ajuste `prompt.ts` para pedir o JSON
+  no prompt. `parser.ts` já tolera respostas com cercas de código, e
+  `validator.ts` garante o contrato. **O frontend não muda em nada.**
+
+### Histórico para evolução da IA
+
+Cada refeição salva grava em `meal_logs.analysis_json`: texto original
+(`sourceText`), itens e totais retornados, `confidence`, `parserVersion`,
+`model` e `analyzedAt` — base para comparar versões de prompt/modelo no futuro.
+
+### Logs e observabilidade
+
+A função emite logs estruturados (JSON) sem dados sensíveis — duração,
+contagem de itens, confidence e tokens. Veja em
+**Edge Functions → nutrition-analysis → Logs** no painel do Supabase.
+
+---
+
 ## Deploy na Vercel
 
 1. Faça push do repositório para o GitHub.
@@ -97,11 +196,13 @@ src/
 ├── pages/             # Welcome, Auth, Home, Log, History, Goals, Profile
 ├── repositories/      # Meals, Goals, Water, Activity, Profile (Supabase)
 ├── routes/            # AppRoutes + guards (ProtectedRoute, PublicOnlyRoute)
+├── services/
+│   └── ai/            # NutritionService — única porta p/ a Edge Function de IA
 ├── state/             # AuthContext (sessão) + AppStateContext (dados)
 ├── hooks/             # useOnlineStatus
 ├── lib/
 │   ├── supabase.ts    # client único + tradução de erros de auth
-│   ├── nutrition.ts   # analisador mockado + contrato p/ futura IA
+│   ├── nutrition.ts   # contrato NutritionAnalyzer + edição de análises
 │   ├── constants.ts   # metas padrão, tamanho do copo
 │   └── format.ts      # datas, horários e labels pt-BR
 ├── types/             # nutrition.ts (MealLog, UserGoals…) + user.ts (Profile)
@@ -110,7 +211,9 @@ src/
 └── main.tsx
 
 supabase/
-└── init.sql           # schema completo + RLS + triggers (executar no painel)
+├── init.sql           # schema completo + RLS + triggers (executar no painel)
+└── functions/
+    └── nutrition-analysis/   # Edge Function de análise nutricional por IA
 ```
 
 ## Decisões de arquitetura
@@ -127,5 +230,9 @@ supabase/
 - **RLS como camada final de segurança**: mesmo que uma query esqueça o filtro
   por usuário, o Postgres bloqueia acesso a dados de terceiros.
 - **Analisador nutricional**: `src/lib/nutrition.ts` expõe o tipo
-  `NutritionAnalyzer` — a implementação atual é uma tabela mock local; na
-  Sprint 3 basta trocar por uma chamada de IA mantendo a mesma assinatura.
+  `NutritionAnalyzer`; a implementação real é `analyzeMealWithAI`
+  (`src/services/ai/NutritionService.ts`), que chama a Edge Function
+  `nutrition-analysis`. Novas fontes (foto, voz) implementam o mesmo contrato.
+- **IA isolada no backend**: a chave do provedor de IA é secret da Edge
+  Function; trocar de modelo é uma env var, trocar de provedor é editar um
+  único arquivo no backend.

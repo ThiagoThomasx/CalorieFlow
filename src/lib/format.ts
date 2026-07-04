@@ -20,14 +20,6 @@ export function formatFullDate(date: Date): string {
   }).format(date)
 }
 
-/** "04/07" */
-export function formatShortDate(date: Date): string {
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-  }).format(date)
-}
-
 /** "07:40" */
 export function formatTime(iso: string): string {
   return new Intl.DateTimeFormat('pt-BR', {
