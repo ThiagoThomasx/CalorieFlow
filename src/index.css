@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@theme {
+  /* ---- Typography ---- */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Sora", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  /* ---- Palette: deep graphite base ---- */
+  --color-ink: #07090c;
+  --color-surface: #0e1116;
+  --color-raise: #151a21;
+  --color-line: #232a33;
+
+  --color-snow: #f4f6f8;
+  --color-fog: #8b93a1;
+  --color-faint: #5b626e;
+
+  /* ---- Brand ---- */
+  --color-lime: #b9f24d;
+  --color-lime-soft: #d3f78a;
+  --color-cyan: #6fd6e8;
+  --color-violet: #a78bfa;
+  --color-amber: #f5a154;
+
+  /* ---- Motion ---- */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html {
+    background-color: var(--color-ink);
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-ink text-snow font-sans antialiased;
+    overscroll-behavior-y: none;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-lime) 30%, transparent);
+  }
+}
+
+@utility glass {
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.055),
+    rgba(255, 255, 255, 0.015)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+@utility glass-strong {
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.09),
+    rgba(255, 255, 255, 0.03)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
+
+/* Ambient glow orbs used on Welcome/Auth backgrounds */
+@utility orb {
+  position: absolute;
+  border-radius: 100%;
+  filter: blur(90px);
+  pointer-events: none;
+}
