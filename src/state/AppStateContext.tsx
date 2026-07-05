@@ -38,6 +38,7 @@ interface AppState {
   profile: Profile | null
   toast: string | null
   addMeal: (mealType: MealType, analysis: NutritionAnalysis) => Promise<boolean>
+  deleteMeal: (mealId: string) => Promise<boolean>
   addWater: (ml: number) => void
   updateGoals: (partial: Partial<UserGoals>) => void
   retry: () => void
@@ -131,12 +132,38 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         const saved = await mealsRepository.create(userId, { mealType, analysis })
         setMeals((current) => [saved, ...current])
         return true
-      } catch {
-        showToast('Não foi possível salvar a refeição. Tente novamente.')
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error('[AppStateContext] Falha ao salvar refeição:', error)
+        }
+        const reason = error instanceof Error ? error.message : null
+        showToast(
+          reason
+            ? `Não foi possível salvar a refeição: ${reason}`
+            : 'Não foi possível salvar a refeição. Tente novamente.',
+        )
         return false
       }
     },
     [userId, showToast],
+  )
+
+  const deleteMeal = useCallback(
+    async (mealId: string): Promise<boolean> => {
+      if (!userId) return false
+      const previous = meals
+      setMeals((current) => current.filter((meal) => meal.id !== mealId))
+      try {
+        await mealsRepository.remove(userId, mealId)
+        showToast('Refeição excluída')
+        return true
+      } catch {
+        setMeals(previous)
+        showToast('Não foi possível excluir a refeição. Tente novamente.')
+        return false
+      }
+    },
+    [userId, meals, showToast],
   )
 
   const addWater = useCallback(
@@ -187,6 +214,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       profile,
       toast,
       addMeal,
+      deleteMeal,
       addWater,
       updateGoals,
       retry,
@@ -201,6 +229,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       profile,
       toast,
       addMeal,
+      deleteMeal,
       addWater,
       updateGoals,
       retry,

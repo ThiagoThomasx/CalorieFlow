@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  AlertTriangle,
   Camera,
   Clock,
   Mic,
@@ -22,8 +23,10 @@ import {
 } from '../lib/nutrition'
 import {
   analyzeMealWithAI,
+  IMPLAUSIBLE_CALORIE_THRESHOLD,
   LOCAL_FALLBACK_MODEL,
   OFFLINE_MESSAGE,
+  UNMATCHED_ITEM_SUFFIX,
 } from '../services/ai/NutritionService'
 import { mealTypeLabel } from '../lib/format'
 import { useAppState } from '../state/AppStateContext'
@@ -66,6 +69,12 @@ export default function LogPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [addItemText, setAddItemText] = useState('')
   const [isAddingItem, setIsAddingItem] = useState(false)
+  const [isReviewConfirmed, setIsReviewConfirmed] = useState(false)
+
+  const needsReview = Boolean(analysis && analysis.calories > IMPLAUSIBLE_CALORIE_THRESHOLD)
+  const hasUnidentifiedItems = Boolean(
+    analysis?.items.some((item) => item.name.includes(UNMATCHED_ITEM_SUFFIX)),
+  )
 
   async function handleAnalyze() {
     if (text.trim().length < MIN_TEXT_LENGTH || isAnalyzing) return
@@ -75,6 +84,7 @@ export default function LogPage() {
     }
     setIsAnalyzing(true)
     setAnalysis(null)
+    setIsReviewConfirmed(false)
     try {
       const result = await analyzeMealWithAI(text)
       setAnalysis(result)
@@ -96,6 +106,7 @@ export default function LogPage() {
     try {
       const extra = await analyzeMealWithAI(addItemText)
       setAnalysis((current) => (current ? appendAnalysisItems(current, extra.items) : current))
+      setIsReviewConfirmed(false)
       setAddItemText('')
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Não foi possível adicionar o item.')
@@ -106,6 +117,7 @@ export default function LogPage() {
 
   function handleQuantityChange(index: number, quantity: number) {
     setAnalysis((current) => (current ? updateItemQuantity(current, index, quantity) : current))
+    setIsReviewConfirmed(false)
   }
 
   function handleRemoveItem(index: number) {
@@ -114,10 +126,12 @@ export default function LogPage() {
       const next = removeAnalysisItem(current, index)
       return next.items.length > 0 ? next : null
     })
+    setIsReviewConfirmed(false)
   }
 
   async function handleSave() {
     if (!analysis || analysis.items.length === 0 || isSaving) return
+    if (needsReview && !isReviewConfirmed) return
     setIsSaving(true)
     const saved = await addMeal(mealType, analysis)
     setIsSaving(false)
@@ -257,6 +271,28 @@ export default function LogPage() {
                 )
               )}
 
+              {hasUnidentifiedItems && (
+                <div className="mt-3 flex items-start gap-2.5 rounded-2xl bg-amber/10 p-3.5 text-xs leading-relaxed text-amber">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    Não reconheci um ou mais itens (marcados como "não
+                    identificado") — os valores deles são só um chute
+                    genérico. Tente descrever o alimento de outro jeito (ex.:
+                    tipo, preparo) para uma estimativa melhor.
+                  </span>
+                </div>
+              )}
+
+              {needsReview && (
+                <div className="mt-3 flex items-start gap-2.5 rounded-2xl bg-amber/10 p-3.5 text-xs leading-relaxed text-amber">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    Esse valor está muito acima do esperado para uma refeição
+                    comum. Revise as quantidades e os itens antes de salvar.
+                  </span>
+                </div>
+              )}
+
               <div className="mt-4 grid grid-cols-3 gap-2.5">
                 <NutrientPill label="Proteína" value={`${analysis.protein}g`} tone="text-lime" />
                 <NutrientPill label="Carboidratos" value={`${analysis.carbs}g`} tone="text-cyan" />
@@ -321,7 +357,25 @@ export default function LogPage() {
               ))}
             </div>
 
-            <Button fullWidth onClick={handleSave} isLoading={isSaving} className="mt-4">
+            {needsReview && (
+              <label className="mt-4 flex items-start gap-2.5 text-xs text-fog">
+                <input
+                  type="checkbox"
+                  checked={isReviewConfirmed}
+                  onChange={(event) => setIsReviewConfirmed(event.target.checked)}
+                  className="mt-0.5 size-4 shrink-0 accent-lime"
+                />
+                Revisei os valores acima e confirmo que estão corretos
+              </label>
+            )}
+
+            <Button
+              fullWidth
+              onClick={handleSave}
+              isLoading={isSaving}
+              disabled={needsReview && !isReviewConfirmed}
+              className="mt-4"
+            >
               Salvar refeição
             </Button>
           </motion.div>

@@ -1,8 +1,12 @@
+import { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Droplets, Flame, Minus, Plus, Zap } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Objective } from '../types/nutrition'
 import { useAppState } from '../state/AppStateContext'
 import { formatMl } from '../lib/format'
+import { OBJECTIVE_PRESETS } from '../lib/constants'
+import { Button } from '../components/ui/Button'
 import { GlassCard } from '../components/ui/GlassCard'
 import { ErrorState } from '../components/ui/ErrorState'
 import { Skeleton } from '../components/ui/Skeleton'
@@ -83,6 +87,30 @@ const WATER_STEP = 250
 
 export default function GoalsPage() {
   const { status, goals, updateGoals, retry } = useAppState()
+  const [pendingObjective, setPendingObjective] = useState<Objective | null>(null)
+
+  function handleSelectObjective(objective: Objective) {
+    if (objective === goals.objective) return
+    setPendingObjective(objective)
+  }
+
+  function handleApplyPreset() {
+    if (!pendingObjective) return
+    const preset = OBJECTIVE_PRESETS[pendingObjective]
+    updateGoals({
+      objective: pendingObjective,
+      caloriesGoal: preset.caloriesGoal,
+      proteinGoal: preset.proteinGoal,
+      waterGoalMl: preset.waterGoalMl,
+    })
+    setPendingObjective(null)
+  }
+
+  function handleKeepCurrentGoals() {
+    if (!pendingObjective) return
+    updateGoals({ objective: pendingObjective })
+    setPendingObjective(null)
+  }
 
   if (status === 'loading') {
     return (
@@ -173,7 +201,7 @@ export default function GoalsPage() {
               <GlassCard key={objective.id} delay={0.2 + index * 0.05}>
                 <button
                   type="button"
-                  onClick={() => updateGoals({ objective: objective.id })}
+                  onClick={() => handleSelectObjective(objective.id)}
                   className={`flex w-full items-center justify-between rounded-3xl p-4 text-left transition-colors duration-200 ${
                     isActive ? 'bg-lime/[0.08]' : 'hover:bg-white/[0.04]'
                   }`}
@@ -197,6 +225,85 @@ export default function GoalsPage() {
           })}
         </div>
       </section>
+
+      <AnimatePresence>
+        {pendingObjective && (
+          <ObjectivePresetModal
+            objective={pendingObjective}
+            onApply={handleApplyPreset}
+            onKeepCurrent={handleKeepCurrentGoals}
+            onDismiss={() => setPendingObjective(null)}
+          />
+        )}
+      </AnimatePresence>
     </PageTransition>
+  )
+}
+
+interface ObjectivePresetModalProps {
+  objective: Objective
+  onApply: () => void
+  onKeepCurrent: () => void
+  onDismiss: () => void
+}
+
+/** Confirma se o usuário quer aplicar as metas sugeridas ao trocar de objetivo. */
+function ObjectivePresetModal({
+  objective,
+  onApply,
+  onKeepCurrent,
+  onDismiss,
+}: ObjectivePresetModalProps) {
+  const preset = OBJECTIVE_PRESETS[objective]
+  const label = OBJECTIVES.find((item) => item.id === objective)?.label ?? objective
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-4 pb-safe backdrop-blur-sm sm:items-center"
+      onClick={onDismiss}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 24, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 12, scale: 0.98 }}
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+        className="glass-strong w-full max-w-sm rounded-3xl p-5 mb-6 sm:mb-0"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 className="font-display text-lg font-bold tracking-tight">
+          Quer ajustar suas metas para este objetivo?
+        </h2>
+        <p className="mt-1.5 text-sm text-fog">
+          Sugestão para <strong className="text-snow">{label}</strong>:
+        </p>
+
+        <div className="mt-4 grid grid-cols-3 gap-2.5">
+          <PresetPill label="Calorias" value={`${preset.caloriesGoal} kcal`} />
+          <PresetPill label="Proteína" value={`${preset.proteinGoal}g`} />
+          <PresetPill label="Água" value={formatMl(preset.waterGoalMl)} />
+        </div>
+
+        <div className="mt-5 flex flex-col gap-2.5">
+          <Button fullWidth onClick={onApply}>
+            Aplicar metas sugeridas
+          </Button>
+          <Button fullWidth variant="ghost" onClick={onKeepCurrent}>
+            Manter minhas metas atuais
+          </Button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+function PresetPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-white/[0.04] px-3 py-2.5 text-center">
+      <p className="font-display text-sm font-semibold text-lime">{value}</p>
+      <p className="mt-0.5 text-[10px] tracking-wide text-faint">{label}</p>
+    </div>
   )
 }

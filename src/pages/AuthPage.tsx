@@ -6,7 +6,7 @@ import { Button } from '../components/ui/Button'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { useAuth } from '../state/AuthContext'
 
-type AuthMode = 'login' | 'signup'
+type AuthMode = 'login' | 'signup' | 'forgot'
 
 const MIN_PASSWORD_LENGTH = 6
 
@@ -16,7 +16,7 @@ const INPUT_CLASSES =
 export default function AuthPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, resetPassword } = useAuth()
 
   const initialMode: AuthMode =
     searchParams.get('mode') === 'signup' ? 'signup' : 'login'
@@ -26,8 +26,35 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null)
+  const [recoverySentTo, setRecoverySentTo] = useState<string | null>(null)
 
   const isLogin = mode === 'login'
+  const isForgot = mode === 'forgot'
+
+  async function handleForgotSubmit(event: FormEvent) {
+    event.preventDefault()
+    setError(null)
+
+    if (!email.includes('@')) {
+      setError('Informe um e-mail válido.')
+      return
+    }
+
+    setIsSubmitting(true)
+    const result = await resetPassword(email)
+    setIsSubmitting(false)
+    if (!result.ok) {
+      setError(result.message)
+      return
+    }
+    setRecoverySentTo(email)
+  }
+
+  function handleBackFromForgot() {
+    setRecoverySentTo(null)
+    setMode('login')
+    setError(null)
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -118,6 +145,66 @@ export default function AuthPage() {
             Ir para o login
           </Button>
         </motion.div>
+      ) : recoverySentTo ? (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="mt-16 flex flex-col items-center text-center"
+        >
+          <div className="glass-strong flex size-16 items-center justify-center rounded-3xl">
+            <MailCheck className="size-8 text-lime" strokeWidth={1.8} />
+          </div>
+          <h1 className="mt-6 font-display text-3xl font-bold tracking-tight">
+            Verifique seu e-mail
+          </h1>
+          <p className="mt-3 max-w-72 text-[15px] leading-relaxed text-fog">
+            Se houver uma conta para{' '}
+            <strong className="text-snow">{recoverySentTo}</strong>, enviamos um
+            link para redefinir sua senha. Abra sua caixa de entrada.
+          </p>
+          <Button fullWidth className="mt-8" onClick={handleBackFromForgot}>
+            Ir para o login
+          </Button>
+        </motion.div>
+      ) : isForgot ? (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="mt-10"
+        >
+          <h1 className="font-display text-3xl font-bold tracking-tight">
+            Recuperar senha
+          </h1>
+          <p className="mt-2 text-[15px] text-fog">
+            Informe seu e-mail e enviaremos um link para redefinir sua senha.
+          </p>
+
+          <form onSubmit={handleForgotSubmit} className="mt-6 flex flex-col gap-3.5">
+            <input
+              type="email"
+              autoComplete="email"
+              placeholder="seu@email.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              className={INPUT_CLASSES}
+            />
+
+            {error && (
+              <p role="alert" className="px-1 text-sm text-amber">
+                {error}
+              </p>
+            )}
+
+            <Button type="submit" fullWidth isLoading={isSubmitting} className="mt-1">
+              Enviar link de recuperação
+            </Button>
+            <Button type="button" variant="ghost" fullWidth onClick={handleBackFromForgot}>
+              Voltar para o login
+            </Button>
+          </form>
+        </motion.div>
       ) : (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
@@ -179,6 +266,19 @@ export default function AuthPage() {
               onChange={(event) => setPassword(event.target.value)}
               className={INPUT_CLASSES}
             />
+
+            {isLogin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('forgot')
+                  setError(null)
+                }}
+                className="self-end text-xs font-medium text-fog transition-colors hover:text-lime"
+              >
+                Esqueci minha senha
+              </button>
+            )}
 
             {error && (
               <p role="alert" className="px-1 text-sm text-amber">

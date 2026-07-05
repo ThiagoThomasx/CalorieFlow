@@ -42,6 +42,49 @@ export interface NewMealInput {
   analysis: NutritionAnalysis
 }
 
+export interface MealInsertPayload {
+  user_id: string
+  meal_type: MealType
+  description: string
+  analysis_json: NutritionAnalysis
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+  fiber: number
+  sodium: number
+}
+
+/**
+ * Arredonda um macro para um inteiro não-negativo — `meal_logs` declara
+ * calories/protein/carbs/fat/fiber/sodium como `integer`. O analisador local
+ * calcula macros com uma casa decimal (ex.: 28.7g de proteína); enviar esse
+ * valor direto ao Postgres falha com "invalid input syntax for type integer"
+ * porque a coluna não aceita fração. `analysis_json` guarda a precisão
+ * original para referência; só as colunas planas precisam ser inteiras.
+ */
+function toIntegerColumn(value: number): number {
+  if (!Number.isFinite(value)) return 0
+  return Math.max(0, Math.round(value))
+}
+
+/** Monta o payload de inserção a partir de uma análise — função pura, testável sem rede. */
+export function buildMealInsertPayload(userId: string, input: NewMealInput): MealInsertPayload {
+  const { analysis } = input
+  return {
+    user_id: userId,
+    meal_type: input.mealType,
+    description: analysis.description,
+    analysis_json: analysis,
+    calories: toIntegerColumn(analysis.calories),
+    protein: toIntegerColumn(analysis.protein),
+    carbs: toIntegerColumn(analysis.carbs),
+    fat: toIntegerColumn(analysis.fat),
+    fiber: toIntegerColumn(analysis.fiber),
+    sodium: toIntegerColumn(analysis.sodium),
+  }
+}
+
 /** Acesso à tabela meal_logs — única porta de entrada para refeições. */
 export const mealsRepository = {
   /** Refeições do usuário, mais recentes primeiro. */
@@ -59,25 +102,27 @@ export const mealsRepository = {
 
   /** Persiste uma refeição e retorna o registro salvo. */
   async create(userId: string, input: NewMealInput): Promise<MealLog> {
-    const { analysis } = input
     const { data, error } = await requireSupabase()
       .from('meal_logs')
-      .insert({
-        user_id: userId,
-        meal_type: input.mealType,
-        description: analysis.description,
-        analysis_json: analysis,
-        calories: analysis.calories,
-        protein: analysis.protein,
-        carbs: analysis.carbs,
-        fat: analysis.fat,
-        fiber: analysis.fiber,
-        sodium: analysis.sodium,
-      })
+      .insert(buildMealInsertPayload(userId, input))
       .select(MEAL_COLUMNS)
       .single()
 
     if (error) throw new Error(error.message)
     return toMealLog(data as MealRow)
+  },
+
+  /**
+   * Remove uma refeição. O filtro por `user_id` é redundante com a RLS
+   * (policy `meal_logs_delete_own`), mas evita depender apenas dela.
+   */
+  async remove(userId: string, mealId: string): Promise<void> {
+    const { error } = await requireSupabase()
+      .from('meal_logs')
+      .delete()
+      .eq('id', mealId)
+      .eq('user_id', userId)
+
+    if (error) throw new Error(error.message)
   },
 }

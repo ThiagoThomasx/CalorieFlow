@@ -4,7 +4,11 @@ import type { NutritionAnalyzer } from '../../lib/nutrition'
 import { requireSupabase } from '../../lib/supabase'
 import { analyzeMealLocally } from './localAnalyzer'
 
-export { LOCAL_FALLBACK_MODEL } from './localAnalyzer'
+export {
+  LOCAL_FALLBACK_MODEL,
+  IMPLAUSIBLE_CALORIE_THRESHOLD,
+  UNMATCHED_ITEM_SUFFIX,
+} from './localAnalyzer'
 
 /**
  * Serviço de análise nutricional por IA.

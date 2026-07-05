@@ -4,6 +4,7 @@ import {
   Bell,
   Clock,
   Fingerprint,
+  KeyRound,
   LogOut,
   Mail,
   Moon,
@@ -59,15 +60,28 @@ function PreferenceRow({ icon: Icon, label, value }: PreferenceRowProps) {
 
 export default function ProfilePage() {
   const navigate = useNavigate()
-  const { user, signOut } = useAuth()
+  const { user, signOut, resetPassword } = useAuth()
   const { profile, showToast } = useAppState()
   const [isSigningOut, setIsSigningOut] = useState(false)
+  const [isSendingReset, setIsSendingReset] = useState(false)
 
   const displayName =
     profile?.displayName ?? user?.email?.split('@')[0] ?? 'Sua conta'
   const lastSignIn = user?.last_sign_in_at
     ? formatDateTime(user.last_sign_in_at)
     : 'Nesta sessão'
+
+  async function handleChangePassword() {
+    if (isSendingReset || !user?.email) return
+    setIsSendingReset(true)
+    const result = await resetPassword(user.email)
+    setIsSendingReset(false)
+    showToast(
+      result.ok
+        ? `Link de redefinição enviado para ${user.email}`
+        : result.message,
+    )
+  }
 
   async function handleSignOut() {
     if (isSigningOut) return
@@ -112,6 +126,26 @@ export default function ProfilePage() {
             value={user ? 'Autenticado via Supabase' : 'Sem sessão'}
           />
           <InfoRow icon={Clock} label="Último login" value={lastSignIn} />
+        </GlassCard>
+        <GlassCard className="mt-2.5" delay={0.12}>
+          <button
+            type="button"
+            onClick={handleChangePassword}
+            disabled={isSendingReset}
+            className="flex w-full items-center gap-3.5 rounded-3xl p-4 text-left transition-colors duration-200 hover:bg-white/[0.04] disabled:opacity-50"
+          >
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]">
+              <KeyRound className="size-[18px] text-fog" strokeWidth={1.8} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">
+                {isSendingReset ? 'Enviando…' : 'Alterar senha'}
+              </p>
+              <p className="mt-0.5 text-xs text-fog">
+                Enviaremos um link de redefinição para seu e-mail
+              </p>
+            </div>
+          </button>
         </GlassCard>
       </section>
 

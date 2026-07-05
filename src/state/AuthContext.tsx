@@ -20,6 +20,8 @@ export type SignUpResult =
   | { ok: true; needsEmailConfirmation: boolean }
   | { ok: false; message: string }
 
+export type ResetPasswordResult = { ok: true } | { ok: false; message: string }
+
 interface AuthContextValue {
   user: User | null
   session: Session | null
@@ -28,6 +30,8 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<SignInResult>
   signUp: (email: string, password: string) => Promise<SignUpResult>
   signOut: () => Promise<void>
+  /** Envia e-mail de recuperação de senha via Supabase Auth. */
+  resetPassword: (email: string) => Promise<ResetPasswordResult>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -98,6 +102,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw new Error(translateAuthError(error.message))
   }, [])
 
+  const resetPassword = useCallback(
+    async (email: string): Promise<ResetPasswordResult> => {
+      if (!supabase) return { ok: false, message: SUPABASE_NOT_CONFIGURED_MESSAGE }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`,
+      })
+      if (error) return { ok: false, message: translateAuthError(error.message) }
+      return { ok: true }
+    },
+    [],
+  )
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user: session?.user ?? null,
@@ -106,8 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signUp,
       signOut,
+      resetPassword,
     }),
-    [session, isLoading, signIn, signUp, signOut],
+    [session, isLoading, signIn, signUp, signOut, resetPassword],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
